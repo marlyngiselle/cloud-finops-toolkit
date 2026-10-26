@@ -1,58 +1,136 @@
-# cloud-finops-toolkit
+<div align="center">
 
-**Find the Azure spend nobody is using, and act on it safely.**
+<img src=".github/assets/cloud-finops-toolkit-banner.svg" alt="cloud-finops-toolkit" width="100%">
 
-[![CI](https://github.com/marlyngiselle/cloud-finops-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/marlyngiselle/cloud-finops-toolkit/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-3776AB)
-![Typed](https://img.shields.io/badge/mypy-strict-2A6DB2)
-![Lint](https://img.shields.io/badge/lint-ruff-D7FF64)
-![License](https://img.shields.io/badge/license-MIT-green)
+<h3>Find the Azure spend nobody is using, and act on it safely.</h3>
 
-A small, tested Python CLI that turns the usual FinOps levers (clean-up of orphaned resources, tagging governance, rightsizing, auto-shutdown and Azure Hybrid Benefit) into repeatable reports and guarded actions. It reads your estate through Azure Resource Graph and Azure Monitor, and changes nothing unless you explicitly ask it to.
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-1e3a8a?style=for-the-badge&logo=python&logoColor=white)
+![Azure](https://img.shields.io/badge/Azure-Resource%20Graph%20%2B%20Monitor-2456c8?style=for-the-badge)
+![mypy](https://img.shields.io/badge/mypy-strict-0b1f4d?style=for-the-badge)
+![Tests](https://img.shields.io/badge/tests-190%20passing-1d4ed8?style=for-the-badge)
+![Coverage](https://img.shields.io/badge/coverage-98.6%25-1d4ed8?style=for-the-badge)
+![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2456c8?style=for-the-badge&logo=githubactions&logoColor=white)
+![Read-only](https://img.shields.io/badge/default-read--only-15803d?style=for-the-badge)
+![License](https://img.shields.io/badge/license-MIT-3b82f6?style=for-the-badge)
+
+</div>
 
 ---
 
-## The problem
+## In numbers
 
-Cloud waste rarely comes from one big mistake. It comes from hundreds of small leftovers:
+| | |
+| --- | --- |
+| 5 | Commands (`idle`, `tags`, `rightsize`, `hybrid-benefit`, `schedule` with `apply`, `remove` and `run`) |
+| 11 | Azure Resource Graph queries, each a reviewable `.kql` file |
+| 5 | Idle resource categories, 5 tag violation types, 5 Hybrid Benefit workloads |
+| 190 | Tests, no network, run in about one second |
+| 98.6% | Branch coverage (CI floor 85%, the thin Azure SDK adapter is excluded) |
+| 1 | Command that can change anything, and only with `--apply` |
+| 3 | Output formats (`table`, `csv`, `json`) |
+| 0 | Azure accounts needed to try it (`--demo` ships synthetic data) |
 
-- a disk detached during a migration and never deleted,
-- a public IP kept "just in case",
-- a dev VM running all weekend,
-- a VM shut down from inside Windows, which still bills compute,
-- a server sized for a launch peak that never came back,
-- Windows and SQL licenses paid by the hour while the company already owns them.
+## What it is
 
-Each one is cheap to fix once found. The hard part is finding them across every subscription, knowing who owns them, and fixing them without breaking anything. That is what this toolkit does.
+Cloud waste rarely comes from one big mistake. It comes from hundreds of small leftovers, like a disk detached during a migration, a public IP kept just in case, a dev VM running all weekend, a VM stopped from inside Windows that still bills compute, or SQL licenses paid by the hour while the company already owns them.
 
-## What it finds
+`finops` is a small, typed and tested Python CLI that finds those leftovers across every subscription you can read, names the owner, and recommends the next step. It reads the estate through Azure Resource Graph and Azure Monitor and changes nothing unless you explicitly ask it to. It is built for platform and cloud teams who want FinOps as a repeatable report, not a one-off spreadsheet.
 
-| Command | Finds | Data source | Changes anything? |
-| --- | --- | --- | --- |
-| `finops idle` | Unattached managed disks, unassociated public IPs, orphaned NICs, empty App Service plans, VMs stopped but not deallocated | Resource Graph | No |
-| `finops tags` | Resources and resource groups breaking a required-tags policy (missing, empty, value not allowed, pattern mismatch, key case) | Resource Graph + YAML policy | No |
-| `finops rightsize` | Running VMs whose CPU and memory percentiles fit a smaller size, or that are near-idle | Resource Graph + Azure Monitor | No |
-| `finops hybrid-benefit` | Windows VMs, SQL Server VMs, SQL Database, elastic pools and Managed Instances paying for licenses | Resource Graph | No |
-| `finops schedule` | Applies or removes an auto-shutdown tag convention, and runs the shutdown handler | Resource Graph + Compute API | Only with `--apply` |
+## Architecture
 
-Every query is a reviewable `.kql` file in [`queries/`](queries/). Resources tagged `finops-ignore=true` are left out of every report.
+```mermaid
+flowchart LR
+    subgraph CLI["fa:fa-terminal finops CLI"]
+        idle["idle"]
+        tags["tags"]
+        rs["rightsize"]
+        hb["hybrid-benefit"]
+        sch["schedule apply / remove / run"]
+    end
 
-## Install
+    subgraph Logic["fa:fa-code Pure evaluation logic"]
+        rules["idle.py · tags.py · rightsize.py<br/>hybrid_benefit.py · schedule.py"]
+        kql[("fa:fa-file-code queries/*.kql")]
+    end
 
-Requires Python 3.11 or newer.
+    subgraph Ports["fa:fa-plug Provider protocols"]
+        G["ResourceGraphProvider"]
+        M["MetricsProvider"]
+        C["ComputeProvider"]
+    end
+
+    subgraph Impl["fa:fa-cubes Implementations"]
+        AZ["azure.py<br/>DefaultAzureCredential"]
+        DEMO["demo.py<br/>synthetic data"]
+        FAKE["test fakes"]
+    end
+
+    subgraph Azure["fa:fa-cloud Azure"]
+        ARG[("Resource Graph")]
+        MON[("Azure Monitor")]
+        CMP[("Compute API")]
+    end
+
+    idle & tags & rs & hb & sch --> rules
+    kql -.-> G
+    rules --> G & M & C
+    Ports == "implemented by" ==> Impl
+    AZ --> ARG & MON & CMP
+
+    classDef cli fill:#0b1f4d,stroke:#93c5fd,color:#fff,stroke-width:2px
+    classDef logic fill:#1e3a8a,stroke:#93c5fd,color:#fff,stroke-width:2px
+    classDef port fill:#2456c8,stroke:#dbeafe,color:#fff,stroke-width:2px
+    classDef impl fill:#3b82f6,stroke:#dbeafe,color:#fff,stroke-width:2px
+    classDef azure fill:#15803d,stroke:#bbf7d0,color:#fff,stroke-width:2px
+    class idle,tags,rs,hb,sch cli
+    class rules,kql logic
+    class G,M,C port
+    class AZ,DEMO,FAKE impl
+    class ARG,MON,CMP azure
+```
+
+Commands depend on three small protocols, not on Azure SDK clients. Production wires in the Azure implementations, while tests and `--demo` wire in in-memory fakes. That is why every rule is unit tested without a network connection.
+
+## How a report is built
+
+```mermaid
+flowchart LR
+    Q["fa:fa-search Select<br/>KQL over every<br/>readable subscription"] --> F["fa:fa-filter Filter<br/>finops-ignore=true<br/>and exclusions"]
+    F --> E["fa:fa-balance-scale Evaluate<br/>Python rules,<br/>thresholds, percentiles"]
+    E --> R["fa:fa-table Render<br/>table, CSV or JSON<br/>with recommendation"]
+    R --> A{"fa:fa-hand-paper schedule<br/>with --apply?"}
+    A -- no --> D["fa:fa-eye Report only"]
+    A -- yes --> X["fa:fa-power-off Tag or deallocate<br/>VMs in scope"]
+
+    classDef step fill:#1e3a8a,stroke:#93c5fd,color:#fff,stroke-width:2px
+    classDef gate fill:#b45309,stroke:#fde68a,color:#fff,stroke-width:2px
+    classDef safe fill:#15803d,stroke:#bbf7d0,color:#fff,stroke-width:2px
+    class Q,F,E,R step
+    class A,X gate
+    class D safe
+```
+
+Resource Graph is excellent at selecting candidates across thousands of resources in one call and a poor place for business rules that need tests and exceptions. So the `.kql` files select broadly and Python decides.
+
+## Quick start
+
+Requires Python 3.11 or newer. Try every command without an Azure account, since `--demo` swaps in bundled synthetic data.
 
 ```bash
 git clone https://github.com/marlyngiselle/cloud-finops-toolkit.git
 cd cloud-finops-toolkit
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
+
+finops --demo idle
+finops --demo tags --policy examples/tag-policy.yaml
+finops --demo rightsize
+finops --demo hybrid-benefit
+finops --demo schedule run --at 2026-10-27T18:10:00Z
 ```
 
-Authentication uses [`DefaultAzureCredential`](https://learn.microsoft.com/python/api/azure-identity/azure.identity.defaultazurecredential): run `az login` locally, or use a managed identity or workload identity in automation.
-
-## Quick start
-
-Try every command without an Azure account. `--demo` swaps in bundled synthetic data:
+<details>
+<summary>Sample output of <code>finops --demo idle</code></summary>
 
 ```console
 $ finops --demo idle
@@ -71,6 +149,11 @@ stopped-vm              vm-report-batch       rg-data-test    westeurope  Standa
 9 finding(s). empty-app-service-plan: 1, orphaned-nic: 2, stopped-vm: 1, unassociated-public-ip: 2, unattached-disk: 3
 ```
 
+</details>
+
+<details>
+<summary>Sample output of <code>finops --demo rightsize</code></summary>
+
 ```console
 $ finops --demo rightsize
 NAME               RESOURCE_GROUP  VM_SIZE           CPU_P95  MEM_P95  VERDICT   SUGGESTED_SIZE   NOTE
@@ -81,6 +164,11 @@ vm-shop-web-01     rg-shop-prod    Standard_D8s_v5   12.9     30.8     downsize 
 
 6 running VM(s) evaluated over 14 days. downsize: 2, idle: 1, insufficient-data: 1, keep: 2
 ```
+
+</details>
+
+<details>
+<summary>Sample output of <code>finops --demo schedule run</code></summary>
 
 ```console
 $ finops --demo schedule run --at 2026-10-27T18:10:00Z
@@ -96,16 +184,23 @@ vm-shop-dev-02   rg-shop-dev     none        skipped              skip-until 202
 Dry run: nothing was changed. Re-run with --apply to make these changes.
 ```
 
-All outputs, including `tags` and `hybrid-benefit`, CSV and JSON, are in [docs/sample-outputs.md](docs/sample-outputs.md). All names and IDs there are synthetic.
+</details>
+
+Every output, including `tags`, `hybrid-benefit`, CSV and JSON, is in [docs/sample-outputs.md](docs/sample-outputs.md). All names, IDs and IP addresses there are synthetic.
 
 ### Against your estate
 
+Authentication uses [`DefaultAzureCredential`](https://learn.microsoft.com/python/api/azure-identity/azure.identity.defaultazurecredential), so `az login` is enough on a workstation and a managed identity or workload identity works in automation.
+
 ```bash
+az login
+SUB=$(az account show --query id -o tsv)
+
 # Everything the signed-in identity can read
 finops idle
 
-# Two subscriptions, disks detached for at least 30 days, as CSV for a spreadsheet
-finops idle -s <subscription-id> -s <subscription-id> -c unattached-disk --min-age-days 30 -f csv -o idle.csv
+# One subscription, disks detached for at least 30 days, as CSV for a spreadsheet
+finops idle -s "$SUB" -c unattached-disk --min-age-days 30 -f csv -o idle.csv
 
 # Tag compliance, failing a pipeline when anything is non-compliant
 finops tags --policy examples/tag-policy.yaml --fail-on-violations
@@ -121,31 +216,34 @@ finops schedule apply --time 19:00 --tz Europe/Paris --days mon-fri --tag enviro
 finops schedule apply --time 19:00 --tz Europe/Paris --days mon-fri --tag environment=dev --apply
 ```
 
-Output formats: `table` (default), `csv`, `json`. CSV and JSON include full resource IDs and the recommended action; the table keeps to what fits a terminal.
+## Command catalogue
 
-## Permissions
+| Command | Finds | Data source | Changes anything? |
+| --- | --- | --- | --- |
+| `finops idle` | Unattached managed disks, unassociated public IPs, orphaned NICs, empty App Service plans, VMs stopped but not deallocated | Resource Graph | No |
+| `finops tags` | Resources and resource groups breaking a required tags policy (missing, empty, value not allowed, pattern mismatch, key case) | Resource Graph and a YAML policy | No |
+| `finops rightsize` | Running VMs whose CPU and memory percentiles fit a smaller size, or that are near idle | Resource Graph and Azure Monitor | No |
+| `finops hybrid-benefit` | Windows VMs, SQL Server VMs, SQL Database, elastic pools and Managed Instances paying for licenses | Resource Graph | No |
+| `finops schedule` | Applies or removes an auto-shutdown tag convention, and runs the shutdown handler | Resource Graph and Compute API | Only with `--apply` |
 
-Grant the least privilege for what you run, at the management group or subscription scope you want to cover.
+Every query is a reviewable `.kql` file in [`queries/`](queries/), ready to paste into Resource Graph Explorer. Resources tagged `finops-ignore=true` are left out of every report.
 
-| Command | Role |
-| --- | --- |
-| `idle`, `tags`, `hybrid-benefit` | `Reader` |
-| `rightsize` | `Reader` + `Monitoring Reader` |
-| `schedule apply/remove/run` (dry-run) | `Reader` |
-| `schedule apply/remove/run --apply`, timer handler | `Virtual Machine Contributor`, only on the scopes it manages |
+### Auto-shutdown tags
 
-Resource Graph only returns what the identity can read, so a narrow role assignment also limits the report. If a resource you expect is missing, check the identity's scope before concluding it does not exist.
+| Tag | Example | Default |
+| --- | --- | --- |
+| `finops-shutdown-time` | `19:00` | required, enables the schedule |
+| `finops-shutdown-tz` | `Europe/Paris` | `UTC` |
+| `finops-shutdown-days` | `mon-fri`, `daily`, `sat,sun` | `mon-fri` |
+| `finops-shutdown-skip-until` | `2026-11-15` | none |
 
-## Safety
+The handler (`python -m finops.handler`, or the [Azure Function example](examples/azure-function/)) runs on a timer, converts each VM's local time to UTC with daylight saving included, and deallocates VMs inside the shutdown window. That includes VMs stopped from the guest OS, which are still billed.
 
-- **Read-only by default.** Only `schedule` can change anything, and only with `--apply`. The timer handler stays in dry-run unless `FINOPS_DRY_RUN=false`.
-- **No delete, no resize.** Those remain decisions for resource owners through their change process. The toolkit reports and recommends.
-- **No accidental blast radius.** `schedule apply/remove` refuses to run without a selector (`--resource-group`, `--name`, `--tag`) or an explicit `--all-vms`.
-- **Opt-outs are first-class.** `finops-ignore=true` hides a resource from reports; `finops-shutdown-skip-until=YYYY-MM-DD` pauses a schedule, and re-applying a schedule keeps it.
-- **Failures are isolated.** One VM failing to deallocate is logged and the run continues; the exit code reports the failure.
-- **Tag merges are additive.** Applying a schedule rewrites only the `finops-shutdown-*` tags and keeps every other tag.
-
-## Configuration
+| Setting | Meaning | Default |
+| --- | --- | --- |
+| `FINOPS_DRY_RUN` | `false` to actually deallocate | `true` |
+| `FINOPS_WINDOW_MINUTES` | Minutes after the shutdown time a VM is still acted on | `30` |
+| `FINOPS_SUBSCRIPTIONS` | Comma separated subscriptions to scan | all visible |
 
 ### Tag policy
 
@@ -164,64 +262,98 @@ exclude_types:
   - microsoft.network/networkwatchers
 ```
 
-Full example: [`examples/tag-policy.yaml`](examples/tag-policy.yaml).
+Full example in [`examples/tag-policy.yaml`](examples/tag-policy.yaml).
 
-### Auto-shutdown tags
+## Safety and permissions
 
-| Tag | Example | Default |
-| --- | --- | --- |
-| `finops-shutdown-time` | `19:00` | required, enables the schedule |
-| `finops-shutdown-tz` | `Europe/Paris` | `UTC` |
-| `finops-shutdown-days` | `mon-fri`, `daily`, `sat,sun` | `mon-fri` |
-| `finops-shutdown-skip-until` | `2026-11-15` | none |
+| Control | What it guarantees |
+| --- | --- |
+| Read-only by default | Only `schedule` can change anything, and only with `--apply`. The timer handler stays in dry run unless `FINOPS_DRY_RUN=false` |
+| No delete, no resize | Those stay decisions for resource owners through their change process. The toolkit reports and recommends |
+| No accidental blast radius | `schedule apply` and `remove` refuse to run without `--resource-group`, `--name`, `--tag` or an explicit `--all-vms` |
+| First-class opt-outs | `finops-ignore=true` hides a resource from reports, `finops-shutdown-skip-until` pauses a schedule and survives a re-apply |
+| Isolated failures | One VM failing to deallocate is logged, the run continues and the exit code reports it |
+| Additive tag merges | Applying a schedule rewrites only the `finops-shutdown-*` tags and keeps every other tag |
 
-The handler (`python -m finops.handler`, or the [Azure Function example](examples/azure-function/)) runs on a timer, converts each VM's local time to UTC (daylight saving included) and deallocates VMs inside the shutdown window, including VMs stopped from the guest OS that are still billed.
+Grant the least privilege for what you run, at the management group or subscription scope you want to cover.
 
-## How it works
+| Command | Role |
+| --- | --- |
+| `idle`, `tags`, `hybrid-benefit` | `Reader` |
+| `rightsize` | `Reader` and `Monitoring Reader` |
+| `schedule apply`, `remove`, `run` in dry run | `Reader` |
+| `schedule` with `--apply`, timer handler | `Virtual Machine Contributor`, only on the scopes it manages |
+
+## Continuous integration
 
 ```mermaid
 flowchart LR
-    CLI[finops CLI] --> L[Evaluation logic<br/>pure Python, unit tested]
-    L --> P{{Provider protocols}}
-    P --> AZ[Azure SDKs<br/>Resource Graph, Monitor, Compute]
-    P --> D[Synthetic demo data]
-    P --> F[Test fakes]
-    Q[(queries/*.kql)] --> AZ
+    P["fa:fa-code-branch push to main<br/>or pull request"] --> M["fa:fa-layer-group matrix<br/>Python 3.11 and 3.12"]
+    M --> L["fa:fa-broom ruff check<br/>ruff format --check"]
+    L --> T["fa:fa-shield-alt mypy --strict"]
+    T --> U["fa:fa-vial pytest<br/>coverage floor 85%"]
+    U --> S["fa:fa-play demo smoke test<br/>all 5 commands"]
+
+    classDef trig fill:#0b1f4d,stroke:#93c5fd,color:#fff,stroke-width:2px
+    classDef job fill:#2456c8,stroke:#dbeafe,color:#fff,stroke-width:2px
+    classDef ok fill:#15803d,stroke:#bbf7d0,color:#fff,stroke-width:2px
+    class P trig
+    class M,L,T,U job
+    class S ok
 ```
 
-Commands depend on three small protocols, not on Azure SDK clients. Production wires in the Azure implementations; tests and `--demo` wire in in-memory fakes. Details, decision flows and diagrams: [docs/how-it-works.md](docs/how-it-works.md).
-
-## From findings to savings
-
-A report is the start. [docs/finops-playbook.md](docs/finops-playbook.md) covers the operating model: making ownership visible with tags, routing findings to owners, approvals and exemptions, shutdown windows, rightsizing in production, and when Hybrid Benefit, reservations and savings plans make sense (after the clean-up, not before).
-
-## Development
+Actions are pinned by commit SHA, checkout does not persist credentials and the workflow token is read-only. `make check` runs the same checks locally.
 
 ```bash
-make install     # venv + editable install with dev tools
+make install     # venv and editable install with dev tools
 make check       # ruff, mypy --strict, pytest with coverage
 make demo        # run every command on synthetic data
 ```
 
-CI runs the same checks on Python 3.11 and 3.12 with pinned actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+## Before you run it
 
-```text
-src/finops/
-  cli.py              typer CLI
-  idle.py             idle and orphaned resources
-  tags.py             tag policy model and evaluation
-  rightsize.py        percentiles, verdicts, size suggestions
-  hybrid_benefit.py   license evaluation
-  schedule.py         shutdown tag convention, due-time logic, actions
-  handler.py          timer entry point for scheduled shutdown
-  output.py           table, CSV and JSON rendering
-  providers/          protocols, Azure SDK adapters, synthetic demo data
-queries/              Resource Graph queries (.kql), documented
-tests/                pytest suite with in-memory fakes, no network
-docs/                 architecture, FinOps playbook, sample outputs
-examples/             tag policy, Azure Function timer
-```
+> [!WARNING]
+> Resource Graph only returns what the identity can read. A narrow role assignment silently narrows the report, so if a resource you expect is missing, check the identity's scope before concluding it does not exist.
 
-## License
+> [!IMPORTANT]
+> Roll out scheduled shutdown in dry run first. Deploy the handler with `FINOPS_DRY_RUN=true`, tag two or three dev VMs, read a few days of logs, announce the `finops-shutdown-skip-until` opt-out to owners, and only then set it to `false`.
 
-[MIT](LICENSE) © 2026 Giselle Da Costa
+> [!CAUTION]
+> `FINOPS_WINDOW_MINUTES` must be at least the timer interval, or some shutdowns are never due when the timer fires. A rightsizing suggestion never checks regional availability or quota, so a person confirms both before resizing.
+
+> [!TIP]
+> Reports go to stdout and the one-line summary goes to stderr, so `-f csv` and `-f json` stay machine-readable when redirected. CSV and JSON carry the full resource ID and the recommended action.
+
+## Repository map
+
+| Path | Role |
+| --- | --- |
+| `src/finops/cli.py` | Typer CLI, options and output routing |
+| `src/finops/idle.py` | Idle and orphaned resources |
+| `src/finops/tags.py` | Tag policy model and evaluation |
+| `src/finops/rightsize.py` | Percentiles, verdicts, size suggestions |
+| `src/finops/hybrid_benefit.py` | License evaluation |
+| `src/finops/schedule.py` | Shutdown tag convention, due time logic, actions |
+| `src/finops/handler.py` | Timer entry point for scheduled shutdown |
+| `src/finops/output.py` | Table, CSV and JSON rendering |
+| `src/finops/providers/` | Protocols, Azure SDK adapters, synthetic demo data |
+| `queries/` | Resource Graph queries, one `.kql` per check |
+| `tests/` | Pytest suite with in-memory fakes, no network |
+| `examples/` | Tag policy and an Azure Function timer |
+| `.github/workflows/ci.yml` | Lint, types, tests and demo on two Python versions |
+
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [How it works](docs/how-it-works.md) | Architecture, decision flows per command, time zones and midnight handling, testing approach |
+| [FinOps playbook](docs/finops-playbook.md) | From findings to savings: ownership, routing, approvals, shutdown windows, rightsizing, commitments last |
+| [Sample outputs](docs/sample-outputs.md) | Every command in every format, on synthetic data |
+| [Queries](queries/README.md) | What each `.kql` file selects and how to run it by hand |
+| [Azure Function example](examples/azure-function/README.md) | Timer deployment, identity, roles and a safe rollout |
+
+---
+
+<div align="center">
+<sub>MIT licensed · © 2026 Giselle Da Costa · <a href="LICENSE">LICENSE</a></sub>
+</div>
