@@ -1,0 +1,3 @@
+azure-functions
+# Install the toolkit from the repository (or a private package feed).
+cloud-finops-toolkit @ git+https://github.com/marlyngiselle/cloud-finops-toolkit@main
