@@ -1,0 +1,13 @@
+// Windows virtual machines with their current license type.
+// licenseType "Windows_Server" means Azure Hybrid Benefit is applied;
+// empty means the Windows license is billed with the VM. The image reference
+// lets the evaluation skip client OS images (Windows 10/11), which follow
+// different licensing rules.
+resources
+| where type =~ 'microsoft.compute/virtualmachines'
+| where tostring(properties.storageProfile.osDisk.osType) =~ 'Windows'
+| project id, name, type, resourceGroup, subscriptionId, location, tags,
+    vmSize = tostring(properties.hardwareProfile.vmSize),
+    licenseType = tostring(properties.licenseType),
+    imageOffer = tostring(properties.storageProfile.imageReference.offer),
+    imageSku = tostring(properties.storageProfile.imageReference.sku)

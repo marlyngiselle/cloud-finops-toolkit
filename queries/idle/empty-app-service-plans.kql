@@ -1,0 +1,12 @@
+// App Service plans hosting zero apps.
+// A plan is billed for its instances even when no web app, function app or
+// slot runs on it. Free (F1) and Consumption (Dynamic) plans cost nothing when
+// empty and are excluded.
+resources
+| where type =~ 'microsoft.web/serverfarms'
+| where toint(properties.numberOfSites) == 0
+| where tostring(sku.tier) !in~ ('Free', 'Dynamic')
+| project id, name, type, resourceGroup, subscriptionId, location, tags,
+    skuName = tostring(sku.name),
+    skuTier = tostring(sku.tier),
+    numberOfWorkers = toint(properties.numberOfWorkers)

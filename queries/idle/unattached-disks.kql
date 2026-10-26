@@ -1,0 +1,14 @@
+// Unattached managed disks.
+// A disk in state "Unattached" is not mounted by any VM but is still billed
+// for its provisioned size and tier. lastOwnershipUpdateTime tells how long it
+// has been detached. Disks reserved by Azure Site Recovery or backups report a
+// different diskState ("Reserved", "ActiveSAS") and are deliberately excluded.
+resources
+| where type =~ 'microsoft.compute/disks'
+| where tostring(properties.diskState) =~ 'Unattached'
+| where isempty(managedBy)
+| project id, name, type, resourceGroup, subscriptionId, location, tags,
+    skuName = tostring(sku.name),
+    diskSizeGB = toint(properties.diskSizeGB),
+    timeCreated = tostring(properties.timeCreated),
+    lastOwnershipUpdateTime = tostring(properties.LastOwnershipUpdateTime)

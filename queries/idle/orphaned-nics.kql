@@ -1,0 +1,13 @@
+// Network interfaces attached to nothing.
+// NICs carry no direct charge, but orphans keep public IPs, NSG associations
+// and private IP reservations alive and block subnet clean-up. NICs owned by
+// private endpoints or Private Link services are managed by Azure and excluded.
+resources
+| where type =~ 'microsoft.network/networkinterfaces'
+| where isnull(properties.virtualMachine)
+| where isnull(properties.privateEndpoint)
+| where isnull(properties.privateLinkService)
+| extend ipConfigurations = properties.ipConfigurations
+| project id, name, type, resourceGroup, subscriptionId, location, tags,
+    hasPublicIp = isnotnull(ipConfigurations[0].properties.publicIPAddress),
+    privateIp = tostring(ipConfigurations[0].properties.privateIPAddress)

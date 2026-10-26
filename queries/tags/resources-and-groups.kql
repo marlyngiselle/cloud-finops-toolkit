@@ -1,0 +1,10 @@
+// Every resource and every resource group, with its tags.
+// Resource groups are returned too so the policy can optionally let resources
+// inherit tags from their group (inherit_from_resource_group: true).
+resources
+| project id, name, type, resourceGroup, subscriptionId, location, tags
+| union (
+    resourcecontainers
+    | where type =~ 'microsoft.resources/subscriptions/resourcegroups'
+    | project id, name, type, resourceGroup = name, subscriptionId, location, tags
+)

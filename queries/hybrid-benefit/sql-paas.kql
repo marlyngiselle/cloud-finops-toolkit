@@ -1,0 +1,13 @@
+// vCore-based Azure SQL Databases, elastic pools and Managed Instances.
+// licenseType "LicenseIncluded" pays for the SQL Server license; "BasePrice"
+// means Hybrid Benefit is applied. DTU-based databases have no licenseType and
+// are filtered out.
+resources
+| where type in~ ('microsoft.sql/servers/databases', 'microsoft.sql/servers/elasticpools',
+    'microsoft.sql/managedinstances')
+| where isnotempty(properties.licenseType)
+| project id, name, type, resourceGroup, subscriptionId, location, tags,
+    licenseType = tostring(properties.licenseType),
+    skuName = tostring(sku.name),
+    skuTier = tostring(sku.tier),
+    vCores = toint(sku.capacity)

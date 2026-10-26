@@ -1,0 +1,11 @@
+// Public IP addresses not associated with anything.
+// A Standard SKU public IP is billed per hour whether or not it is attached.
+// "Associated" means bound to a NIC / load balancer IP configuration or to a
+// NAT gateway; anything else is a candidate for release.
+resources
+| where type =~ 'microsoft.network/publicipaddresses'
+| where isnull(properties.ipConfiguration) and isnull(properties.natGateway)
+| project id, name, type, resourceGroup, subscriptionId, location, tags,
+    skuName = tostring(sku.name),
+    allocationMethod = tostring(properties.publicIPAllocationMethod),
+    ipAddress = tostring(properties.ipAddress)

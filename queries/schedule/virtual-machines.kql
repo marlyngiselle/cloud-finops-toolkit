@@ -1,0 +1,8 @@
+// All virtual machines with their tags and power state.
+// Used both to select targets for "schedule apply/remove" and by the shutdown
+// handler, which keeps only VMs carrying the finops-shutdown-* tags.
+resources
+| where type =~ 'microsoft.compute/virtualmachines'
+| project id, name, type, resourceGroup, subscriptionId, location, tags,
+    powerState = tostring(properties.extended.instanceView.powerState.code),
+    vmSize = tostring(properties.hardwareProfile.vmSize)

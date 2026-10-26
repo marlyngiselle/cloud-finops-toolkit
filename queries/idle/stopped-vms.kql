@@ -1,0 +1,9 @@
+// Virtual machines stopped from inside the guest OS but not deallocated.
+// "PowerState/stopped" keeps the compute allocation, so the VM is still billed
+// at its full hourly rate. Only "PowerState/deallocated" stops compute billing.
+resources
+| where type =~ 'microsoft.compute/virtualmachines'
+| extend powerState = tostring(properties.extended.instanceView.powerState.code)
+| where powerState =~ 'PowerState/stopped'
+| project id, name, type, resourceGroup, subscriptionId, location, tags, powerState,
+    vmSize = tostring(properties.hardwareProfile.vmSize)

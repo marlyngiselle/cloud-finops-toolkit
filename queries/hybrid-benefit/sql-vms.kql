@@ -1,0 +1,8 @@
+// SQL Server on Azure VMs (SQL IaaS Agent extension resources).
+// sqlServerLicenseType: PAYG (license billed hourly), AHUB (Hybrid Benefit)
+// or DR (free passive disaster-recovery replica).
+resources
+| where type =~ 'microsoft.sqlvirtualmachine/sqlvirtualmachines'
+| project id, name, type, resourceGroup, subscriptionId, location, tags,
+    licenseType = tostring(properties.sqlServerLicenseType),
+    sqlImageSku = tostring(properties.sqlImageSku)

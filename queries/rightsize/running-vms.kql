@@ -1,0 +1,9 @@
+// Running virtual machines, the population for rightsizing.
+// Deallocated VMs have no recent metrics and are better handled by the idle
+// and schedule commands.
+resources
+| where type =~ 'microsoft.compute/virtualmachines'
+| extend powerState = tostring(properties.extended.instanceView.powerState.code)
+| where powerState =~ 'PowerState/running'
+| project id, name, type, resourceGroup, subscriptionId, location, tags, powerState,
+    vmSize = tostring(properties.hardwareProfile.vmSize)
