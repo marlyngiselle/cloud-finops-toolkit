@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Reports generated locally may contain real resource IDs
+reports/
+*.local.csv
+*.local.json
+
+# Azure Functions local settings can hold secrets
+local.settings.json
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
