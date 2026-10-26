@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
+from typer.testing import CliRunner, Result
 
 from conftest import FakeCompute, FakeGraph, resource
 from finops import __version__, cli
@@ -21,6 +22,19 @@ def runner() -> CliRunner:
     return CliRunner()
 
 
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def plain(result: Result) -> str:
+    """Output without ANSI styling.
+
+    Typer renders usage errors through rich, which forces a styled terminal when
+    GITHUB_ACTIONS, FORCE_COLOR or PY_COLORS is set. The escape codes then split
+    tokens such as ``--all-vms``, so assertions read the unstyled text.
+    """
+    return ANSI_ESCAPE.sub("", result.output)
+
+
 @pytest.fixture
 def fake(monkeypatch: pytest.MonkeyPatch, providers: Providers) -> Providers:
     monkeypatch.setattr(cli, "build_providers", lambda demo: providers)
@@ -30,23 +44,23 @@ def fake(monkeypatch: pytest.MonkeyPatch, providers: Providers) -> Providers:
 def test_version(runner: CliRunner) -> None:
     result = runner.invoke(cli.app, ["--version"])
     assert result.exit_code == 0
-    assert __version__ in result.output
+    assert __version__ in plain(result)
 
 
 def test_help_lists_commands(runner: CliRunner) -> None:
     result = runner.invoke(cli.app, ["--help"])
     assert result.exit_code == 0
     for command in ("idle", "tags", "rightsize", "schedule", "hybrid-benefit"):
-        assert command in result.output
+        assert command in plain(result)
 
 
 class TestDemo:
     def test_idle(self, runner: CliRunner) -> None:
         result = runner.invoke(cli.app, ["--demo", "idle"])
         assert result.exit_code == 0, result.output
-        assert "disk-build-agent-old" in result.output
-        assert "disk-legal-hold-2025" not in result.output  # finops-ignore
-        assert "9 finding(s)" in result.output
+        assert "disk-build-agent-old" in plain(result)
+        assert "disk-legal-hold-2025" not in plain(result)  # finops-ignore
+        assert "9 finding(s)" in plain(result)
 
     def test_idle_json_to_file(self, runner: CliRunner, tmp_path: Path) -> None:
         out = tmp_path / "idle.json"
@@ -64,14 +78,14 @@ class TestDemo:
     def test_tags(self, runner: CliRunner) -> None:
         result = runner.invoke(cli.app, ["--demo", "tags", "-p", str(POLICY)])
         assert result.exit_code == 0, result.output
-        assert "vm-build-agent-02" in result.output
-        assert "2/10 resources compliant" in result.output
+        assert "vm-build-agent-02" in plain(result)
+        assert "2/10 resources compliant" in plain(result)
 
     def test_tags_fail_on_violations_and_all(self, runner: CliRunner) -> None:
         args = ["--demo", "tags", "-p", str(POLICY), "--all", "--fail-on-violations"]
         result = runner.invoke(cli.app, args)
         assert result.exit_code == 1
-        assert "kv-shop-dev" in result.output  # compliant rows included with --all
+        assert "kv-shop-dev" in plain(result)  # compliant rows included with --all
 
     def test_tags_bad_policy(self, runner: CliRunner, tmp_path: Path) -> None:
         bad = tmp_path / "p.yaml"
@@ -82,11 +96,11 @@ class TestDemo:
     def test_rightsize(self, runner: CliRunner) -> None:
         result = runner.invoke(cli.app, ["--demo", "rightsize"])
         assert result.exit_code == 0, result.output
-        assert "Standard_D4s_v5" in result.output
-        assert "vm-shop-web-02" not in result.output  # keep, hidden by default
+        assert "Standard_D4s_v5" in plain(result)
+        assert "vm-shop-web-02" not in plain(result)  # keep, hidden by default
         result_all = runner.invoke(cli.app, ["--demo", "rightsize", "--all", "--percentile", "90"])
-        assert "vm-shop-web-02" in result_all.output
-        assert "CPU_P90" in result_all.output
+        assert "vm-shop-web-02" in plain(result_all)
+        assert "CPU_P90" in plain(result_all)
 
     def test_rightsize_invalid_settings(self, runner: CliRunner) -> None:
         args = ["--demo", "rightsize", "--idle-cpu-threshold", "50", "--cpu-threshold", "10"]
@@ -95,15 +109,15 @@ class TestDemo:
     def test_hybrid_benefit_csv(self, runner: CliRunner) -> None:
         result = runner.invoke(cli.app, ["--demo", "hybrid-benefit", "-w", "sql-vm", "-f", "csv"])
         assert result.exit_code == 0, result.output
-        assert result.output.startswith("workload,name,resource_group")
-        assert "sqlvm-erp-01" in result.output
+        assert plain(result).startswith("workload,name,resource_group")
+        assert "sqlvm-erp-01" in plain(result)
 
     def test_schedule_run_at(self, runner: CliRunner) -> None:
         args = ["--demo", "schedule", "run", "--at", "2026-10-27T18:10:00Z"]
         result = runner.invoke(cli.app, args)
         assert result.exit_code == 0, result.output
-        assert "vm-shop-dev-01" in result.output
-        assert "Dry run" in result.output
+        assert "vm-shop-dev-01" in plain(result)
+        assert "Dry run" in plain(result)
 
     def test_schedule_run_bad_at(self, runner: CliRunner) -> None:
         result = runner.invoke(cli.app, ["--demo", "schedule", "run", "--at", "teatime"])
@@ -122,7 +136,7 @@ class TestScheduleWithFakes:
     def test_apply_requires_a_selector(self, runner: CliRunner, fake: Providers) -> None:
         result = runner.invoke(cli.app, ["schedule", "apply", "--time", "19:00"])
         assert result.exit_code == 2
-        assert "--all-vms" in result.output
+        assert "--all-vms" in plain(result)
 
     def test_apply_dry_run_then_apply(self, runner: CliRunner, fake: Providers) -> None:
         assert isinstance(fake.graph, FakeGraph)
@@ -132,7 +146,7 @@ class TestScheduleWithFakes:
 
         dry = runner.invoke(cli.app, base)
         assert dry.exit_code == 0, dry.output
-        assert "dry-run" in dry.output
+        assert "dry-run" in plain(dry)
         assert fake.compute.tag_calls == []
 
         live = runner.invoke(cli.app, [*base, "--apply"])
@@ -166,8 +180,8 @@ class TestScheduleWithFakes:
         self._vms(fake.graph)
         result = runner.invoke(cli.app, ["schedule", "remove", "-g", "rg-prod", "-n", "vm-prod"])
         assert result.exit_code == 0, result.output
-        assert "vm-prod" in result.output
-        assert "unchanged" in result.output
+        assert "vm-prod" in plain(result)
+        assert "unchanged" in plain(result)
 
     def test_run_naive_at_is_utc_and_apply(self, runner: CliRunner, fake: Providers) -> None:
         assert isinstance(fake.graph, FakeGraph)
@@ -178,8 +192,8 @@ class TestScheduleWithFakes:
         args = ["schedule", "run", "--at", "2026-10-27T18:05:00", "--apply"]
         result = runner.invoke(cli.app, args)
         assert result.exit_code == 0, result.output
-        assert "done" in result.output
-        assert "Dry run" not in result.output
+        assert "done" in plain(result)
+        assert "Dry run" not in plain(result)
         assert len(fake.compute.deallocated) == 1
 
 
