@@ -1,0 +1,28 @@
+# Required-tags policy for `finops tags --policy examples/tag-policy.yaml`.
+#
+# Each rule names a tag that every in-scope resource must carry. Optional checks:
+#   allowed:  the value must be one of these (case-insensitive unless
+#             case_sensitive_values: true)
+#   pattern:  the whole value must match this regular expression
+required_tags:
+  - name: owner
+    pattern: '^[^@\s]+@example\.com$'      # a reachable mailbox, not a person's initials
+  - name: cost-center
+    pattern: '^CC-\d{4}$'
+  - name: environment
+    allowed: [dev, test, prod]
+  - name: application
+
+# Azure treats tag names as case-insensitive. Set to true to flag "Owner" vs "owner".
+case_sensitive_keys: false
+
+# Count tags set on the resource group as if they were set on the resource.
+# Matches the behaviour of an "inherit a tag from the resource group" policy.
+inherit_from_resource_group: true
+
+# Resource types to leave out (lower-case). Empty include_types means "all types".
+include_types: []
+exclude_types:
+  - microsoft.network/networkwatchers
+  - microsoft.alertsmanagement/smartdetectoralertrules
+  - microsoft.insights/actiongroups
